@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import User, {IUser} from "../models/User";
-import { generateToken } from "../utils/generateToken";
+import { generateAccessToken, generateRefreshToken } from "../utils/generateToken";
+import jwt from "jsonwebtoken";
 
 interface AuthRequest extends Request {
   user?: IUser;
@@ -46,38 +47,73 @@ export const registerUser = async (req:Request, res: Response)=>{
     }
 }
 
-export const loginUser = async (req:Request, res:Response)=>{
-    try{
-        const {email, password} = req.body;
+export const loginUser = async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
 
-        // Validasi input
-        if(!email || !password){
-            return res.status(400).json({message: "All fields are required"});
-        }
+    const user = await User.findOne({ email });
+    if (!user) return res.status(401).json({ message: "Invalid email or password" });
 
-        // Cari user berdasarkan email
-        const user = await User.findOne({email});
-        if(!user){
-            return res.status(400).json({message: "Invalid email or password"})
-        }
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(401).json({ message: "Invalid email or password" });
 
-        // Cek password
-        const isMatch = await bcrypt.compare(password, user.password);
-        if(!isMatch){
-            return res.status(400).json({message: "Invalid email or password"});
-        }
+    // Generate tokens
+    const accessToken = generateAccessToken(user._id.toString());
+    const refreshToken = generateRefreshToken(user._id.toString());
 
-        // Jika suskse return user + token
-        res.status(200).json({
-            _id: user._id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            token: generateToken(user._id.toString()),
-        });
-    }catch(error){
-        res.status(500).json({message: "Server error", error});
-    }
+    // Simpan refresh token ke DB
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    res.status(200).json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      accessToken,
+      refreshToken,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+
+export const refreshToken = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) return res.status(401).json({ message: "No refresh token provided" });
+
+    // Cari user dengan refreshToken
+    const user = await User.findOne({ refreshToken: token });
+    if (!user) return res.status(403).json({ message: "Invalid refresh token" });
+
+    // Verifikasi refresh token
+    jwt.verify(token, process.env.JWT_REFRESH_SECRET as string, (err, decoded: any) => {
+      if (err || !decoded) return res.status(403).json({ message: "Invalid refresh token" });
+
+      const newAccessToken = generateAccessToken(user._id.toString());
+      res.json({ accessToken: newAccessToken });
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+
+export const logoutUser = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body;
+
+    const user = await User.findOne({ refreshToken: token });
+    if (!user) return res.status(403).json({ message: "Invalid refresh token" });
+
+    // Hapus refresh token
+    user.refreshToken = "";
+    await user.save();
+    res.json({ message: "Logged out successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
 };
 
 export const getUserProfile = async (req: AuthRequest, res: Response) => {
