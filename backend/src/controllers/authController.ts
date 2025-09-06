@@ -87,3 +87,12 @@ export const getUserProfile = async (req: AuthRequest, res: Response) => {
 
   res.json(req.user);
 };
+
+export const getAllUsers = async (req: Request, res: Response) => {
+  try {
+    const users = await User.find().select("-password");
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+};
