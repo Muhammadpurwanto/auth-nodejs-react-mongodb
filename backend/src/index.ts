@@ -2,8 +2,6 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import connectDB from "./config/db";
-import Test from "./models/Test";
-import User from "./models/User";
 import authRoutes from "./routes/authRoutes";
 
 // Load env variables

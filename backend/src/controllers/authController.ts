@@ -1,7 +1,11 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
-import User from "../models/User";
+import User, {IUser} from "../models/User";
 import { generateToken } from "../utils/generateToken";
+
+interface AuthRequest extends Request {
+  user?: IUser;
+}
 
 // Register user
 export const registerUser = async (req:Request, res: Response)=>{
@@ -74,4 +78,12 @@ export const loginUser = async (req:Request, res:Response)=>{
     }catch(error){
         res.status(500).json({message: "Server error", error});
     }
+};
+
+export const getUserProfile = async (req: AuthRequest, res: Response) => {
+  if (!req.user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  res.json(req.user);
 };
