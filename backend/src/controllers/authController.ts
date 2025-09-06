@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import User from "../models/User";
+import { generateToken } from "../utils/generateToken";
 
 // Register user
 export const registerUser = async (req:Request, res: Response)=>{
@@ -40,3 +41,37 @@ export const registerUser = async (req:Request, res: Response)=>{
         res.status(500).json({message: "Server error", error});
     }
 }
+
+export const loginUser = async (req:Request, res:Response)=>{
+    try{
+        const {email, password} = req.body;
+
+        // Validasi input
+        if(!email || !password){
+            return res.status(400).json({message: "All fields are required"});
+        }
+
+        // Cari user berdasarkan email
+        const user = await User.findOne({email});
+        if(!user){
+            return res.status(400).json({message: "Invalid email or password"})
+        }
+
+        // Cek password
+        const isMatch = await bcrypt.compare(password, user.password);
+        if(!isMatch){
+            return res.status(400).json({message: "Invalid email or password"});
+        }
+
+        // Jika suskse return user + token
+        res.status(200).json({
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            token: generateToken(user._id.toString()),
+        });
+    }catch(error){
+        res.status(500).json({message: "Server error", error});
+    }
+};
